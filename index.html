@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>Sorteggio • 2 Squadre per Ruolo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- SheetJS per leggere Excel localmente (solo se l'utente carica un file .xlsx/.xls) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <style>
+    :root{
+      --bg:#0e0f11; --panel:#15171a; --text:#e9eef4; --muted:#9aa3ad;
+      --acc:#5ac8fa; --ok:#3ddc97; --warn:#ffb703; --danger:#ef476f; --line:#262a31; --card:#1a1d22;
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;background:linear-gradient(180deg,#0c0f14,#0e1117 30%,#0b0d12);
+      color:var(--text); font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter:saturate(1.3) blur(8px);
+      background:#0b0e13cc; border-bottom:1px solid var(--line);
+    }
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    .title{display:flex;gap:12px;align-items:center}
+    .logo{
+      width:36px;height:36px;border-radius:10px;background:radial-gradient(circle at 30% 30%,#5ac8fa,transparent 60%),#19202a; border:1px solid #2a313a;
+      box-shadow:inset 0 0 0 1px #1a2028;
+    }
+    .title h1{font-size:18px;margin:0}
+    .grid{display:grid;gap:16px}
+    @media (min-width:940px){ .grid{grid-template-columns: 320px 1fr} }
+
+    .card{
+      background:linear-gradient(180deg,#151922 0%,#12151b 100%); border:1px solid var(--line);
+      border-radius:var(--radius); padding:14px; box-shadow:0 10px 30px #00000033, inset 0 1px 0 #ffffff09;
+    }
+    .card h2{margin:0 0 10px;font-size:15px}
+    .muted{color:var(--muted)}
+    .inputs{display:grid;grid-template-columns:repeat(3, 1fr); gap:10px; margin-top:8px}
+    .input{
+      background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px;
+    }
+    .input label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px}
+    .input .row{display:flex; align-items:center; gap:8px; justify-content:space-between}
+    .input input[type="number"]{
+      width:80px; padding:8px 10px; border-radius:10px; border:1px solid #2a3038;
+      background:#0f1217; color:var(--text);
+    }
+    .badge{
+      font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid #303540; background:#121720; color:#b9c3cf;
+    }
+    .btns{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+    button, .btn{
+      cursor:pointer; border:1px solid #2a3038; background:#121721; color:var(--text); border-radius:12px;
+      padding:10px 12px; font-weight:600;
+    }
+    .primary{background:linear-gradient(180deg,#2b9cf2,#1f7ed0); border-color:#2c6fb1}
+    .ghost{background:#0f141c}
+    .good{background:linear-gradient(180deg,#3ddc97,#2eb67d); border-color:#2aa36c}
+    .warn{background:linear-gradient(180deg,#ffb703,#e29b05); border-color:#cc8500}
+    .danger{background:linear-gradient(180deg,#ef476f,#c73b5c); border-color:#a72f4c}
+    .mini{padding:7px 10px; font-size:12px}
+    .teams{display:grid; grid-template-columns:1fr; gap:16px}
+    @media (min-width:700px){ .teams{grid-template-columns:1fr 1fr} }
+
+    .team{
+      background:linear-gradient(180deg,#171b23,#141820); border:1px solid var(--line); border-radius:16px; padding:12px;
+    }
+    .team h3{margin:0 0 8px; font-size:14px}
+    .pill{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #2a313c; background:#0e131a; border-radius:999px; font-size:12px; color:#c3d0de}
+    .list{display:grid; gap:8px}
+    .player{
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      background:#121721; border:1px solid #262c36; border-radius:12px; padding:10px;
+    }
+    .left{display:flex; align-items:center; gap:10px}
+    .role{
+      width:26px; height:26px; border-radius:8px; display:grid; place-items:center; font-weight:800; font-size:12px;
+      background:#10151d; border:1px solid #2a303a; color:#a7b8ca;
+    }
+    .name{font-size:13px}
+    .id{font-size:11px; color:#8fa1b3}
+    .status{margin-top:8px; font-size:12px}
+    .status .ok{color:var(--ok)} .status .warn{color:var(--warn)} .status .err{color:var(--danger)}
+    .row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+    .right{display:flex; align-items:center; gap:8px}
+    input[type="file"]{display:none}
+    .link{color:#a1d8ff; text-decoration:none}
+    .sep{height:1px; background:#232830; margin:12px 0}
+    .small{font-size:12px}
+    .hint{font-size:12px; color:#a8b3bf}
+    .kpi{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+    .kpi .pill{background:#12161f}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap title">
+      <div class="logo" aria-hidden="true"></div>
+      <h1>Sorteggio 2 Squadre • per Ruolo</h1>
+      <span class="muted small">Carica auto <code>players.json</code> + upload JSON/Excel</span>
+    </div>
+  </header>
+
+  <main class="wrap grid">
+    <!-- Pannello input -->
+    <section class="card" id="controls">
+      <h2>Imposta quanti giocatori per ruolo (per squadra)</h2>
+      <div class="kpi" id="poolInfo"></div>
+
+      <div class="inputs" id="roleInputs">
+        <!-- Generati da JS: S, R, L, OH, OPP, MB -->
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="drawBtn">Sorteggia 2 Squadre</button>
+        <button class="ghost" id="reshuffleBtn" disabled>Rigenera sorteggio</button>
+        <button class="ghost" id="resetBtn">Reset</button>
+        <label for="fileInput" class="btn">Carica JSON/Excel</label>
+        <input id="fileInput" type="file" accept=".json,.xlsx,.xls,.csv" />
+      </div>
+
+      <div class="row small hint" style="margin-top:8px">
+        <span>Formato atteso:</span>
+        <span class="pill">campi: <b>FullName</b> e <b>Role</b> (S, R, L, OH, OPP, MB)</span>
+        <span class="pill">opz.: <b>ID</b></span>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="status" id="status">Pronto. Se <code>players.json</code> non viene trovato, caricalo sopra.</div>
+    </section>
+
+    <!-- Pannello risultati -->
+    <section class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2>Risultato sorteggio</h2>
+        <div class="btns">
+          <button class="mini good" id="copyBtn" disabled>Copia negli appunti</button>
+          <button class="mini warn" id="csvBtn" disabled>Scarica CSV</button>
+        </div>
+      </div>
+
+      <div class="teams" id="teams">
+        <div class="team" id="teamA">
+          <h3>🏐 Squadra A</h3>
+          <div class="list"></div>
+        </div>
+        <div class="team" id="teamB">
+          <h3>🏐 Squadra B</h3>
+          <div class="list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+  // --- Utility ---
+  const ROLES = ["S","R","L","OH","OPP","MB"];
+  const $ = sel => document.querySelector(sel);
+  const el = (tag, attrs={}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k,v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v;
+      else if (k === "dataset") Object.assign(n.dataset, v);
+      else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+      else if (v !== null && v !== undefined) n.setAttribute(k, v);
+    }
+    for (const k of kids) n.append(k);
+    return n;
+  };
+
+  // PRNG sicuro per shuffle
+  function cryptoShuffle(arr){
+    const a = arr.slice();
+    for(let i=a.length-1;i>0;i--){
+      const r = new Uint32Array(1);
+      crypto.getRandomValues(r);
+      const j = r[0] % (i+1);
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
+  // Normalizza dataset da JSON (array o oggetto) o Excel
+  function normalizeDataset(raw){
+    let items = [];
+    if (Array.isArray(raw)) {
+      items = raw;
+    } else if (raw && typeof raw === "object") {
+      // oggetto mappa -> array
+      items = Object.values(raw);
+    } else {
+      throw new Error("Formato dataset non riconosciuto.");
+    }
+    return items
+      .map((p, idx) => {
+        const keys = Object.keys(p).reduce((acc,k)=>{acc[k.toLowerCase()] = k; return acc;}, {});
+        const roleKey = keys["role"] || keys["ruolo"] || "Role";
+        const nameKey = keys["fullname"] || keys["name"] || keys["giocatore"] || "FullName";
+        const idKey   = keys["id"] || "ID";
+        const role = (p[roleKey] ?? "").toString().trim().toUpperCase();
+        const name = (p[nameKey] ?? "").toString().trim();
+        const id = p[idKey] ?? (idx+1);
+        return { id, name, role, _raw:p };
+      })
+      .filter(p => p.name && ROLES.includes(p.role));
+  }
+
+  // Legge file utente (JSON, Excel, CSV)
+  async function readUserFile(file){
+    const ext = (file.name.split(".").pop()||"").toLowerCase();
+    if (ext === "json") {
+      const txt = await file.text();
+      return JSON.parse(txt);
+    }
+    if (ext === "xlsx" || ext === "xls") {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:"array"});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      return XLSX.utils.sheet_to_json(sheet, {defval:""});
+    }
+    if (ext === "csv") {
+      const txt = await file.text();
+      return csvToJSON(txt);
+    }
+    throw new Error("Estensione non supportata: " + ext);
+  }
+
+  // Parser CSV semplice
+  function csvToJSON(text){
+    const rows = text.replace(/\r/g,"").split("\n").filter(Boolean);
+    const headers = rows.shift().split(",").map(h=>h.trim());
+    return rows.map(r=>{
+      const cols = r.split(","); const obj={};
+      headers.forEach((h,i)=>obj[h]= (cols[i]??"").trim());
+      return obj;
+    });
+  }
+
+  // Stato
+  let DATA = []; // [{id, name, role}]
+  let LAST_DRAW = null;
+
+  // UI: genera inputs per ruoli
+  const roleInputs = $("#roleInputs");
+  const roleState = {}; // {S:n, ...}
+  ROLES.forEach(role=>{
+    roleState[role] = 0;
+    const input = el("div",{class:"input", id:`box-${role}`},
+      el("label",{}, `Ruolo ${role}`),
+      el("div",{class:"row"},
+        el("input",{type:"number", min:"0", step:"1", value:"0", id:`qty-${role}`, oninput:e=>{
+          roleState[role] = +e.target.value || 0;
+          validateCounts();
+        }}),
+        el("span",{class:"badge", id:`avail-${role}`}, "Disponibili: —")
+      )
+    );
+    roleInputs.append(input);
+  });
+
+  // Aggiorna badge disponibilità
+  function updateAvailability(){
+    const grouped = groupByRole(DATA);
+    ROLES.forEach(role=>{
+      const n = (grouped.get(role)||[]).length;
+      const b = $(`#avail-${role}`);
+      b.textContent = `Disponibili: ${n}`;
+    });
+    // KPI riepilogo
+    const total = DATA.length;
+    const poolInfo = $("#poolInfo");
+    poolInfo.innerHTML = "";
+    poolInfo.append(
+      el("span",{class:"pill"}, `Giocatori totali: ${total}`),
+      ...ROLES.map(r=>el("span",{class:"pill"}, `${r}: ${(grouped.get(r)||[]).length}`))
+    );
+  }
+
+  function groupByRole(arr){
+    const m = new Map();
+    for (const p of arr) {
+      if (!m.has(p.role)) m.set(p.role, []);
+      m.get(p.role).push(p);
+    }
+    return m;
+  }
+
+  // Validazione numeri richiesti vs pool
+  function validateCounts(){
+    const grouped = groupByRole(DATA);
+    let ok = true, msgs=[];
+    ROLES.forEach(role=>{
+      const need = (roleState[role]||0)*2;
+      const have = (grouped.get(role)||[]).length;
+      const box = $(`#box-${role}`);
+      if (need>0 && have < need) {
+        ok = false;
+        box.style.borderColor = "var(--danger)";
+        msgs.push(`Ruolo ${role}: servono ${need}, disponibili ${have}`);
+      } else {
+        box.style.borderColor = "var(--line)";
+      }
+    });
+    const st = $("#status");
+    if (!DATA.length) {
+      st.innerHTML = `Carica un dataset per procedere.`;
+      return false;
+    }
+    if (!ok) {
+      st.innerHTML = `<span class="err">Non ci sono abbastanza giocatori:</span> ${msgs.join(" • ")}`;
+      return false;
+    }
+    const sumPerTeam = Object.values(roleState).reduce((a,b)=>a+(+b||0),0);
+    st.innerHTML = `Pronto: sorteggio creerà <b>2 squadre</b> da <b>${sumPerTeam}</b> giocatori ciascuna.`;
+    return true;
+  }
+
+  // Sorteggio
+  function drawTeams(){
+    if (!validateCounts()) return;
+
+    const grouped = groupByRole(DATA);
+    const teamA = [], teamB = [];
+    const usedIds = new Set();
+
+    for (const role of ROLES){
+      const perTeam = roleState[role]||0;
+      if (perTeam === 0) continue;
+      const pool = cryptoShuffle(grouped.get(role)||[]);
+      const need = perTeam*2;
+      const pick = pool.slice(0, need);
+
+      // split equilibrato tra A e B
+      const shuffledPick = cryptoShuffle(pick);
+      const aSlice = shuffledPick.slice(0, perTeam);
+      const bSlice = shuffledPick.slice(perTeam, perTeam*2);
+
+      for (const p of aSlice){
+        if (usedIds.has(p.id)) throw new Error("Doppione rilevato (A): " + p.id);
+        usedIds.add(p.id);
+        teamA.push(p);
+      }
+      for (const p of bSlice){
+        if (usedIds.has(p.id)) throw new Error("Doppione rilevato (B): " + p.id);
+        usedIds.add(p.id);
+        teamB.push(p);
+      }
+    }
+
+    // Ordina per ruolo → nome
+    const roleOrder = i => ROLES.indexOf(i.role);
+    teamA.sort((x,y)=> roleOrder(x)-roleOrder(y) || x.name.localeCompare(y.name));
+    teamB.sort((x,y)=> roleOrder(x)-roleOrder(y) || x.name.localeCompare(y.name));
+
+    LAST_DRAW = { teamA, teamB };
+    renderTeams(teamA, teamB);
+    $("#reshuffleBtn").disabled = false;
+    $("#copyBtn").disabled = false;
+    $("#csvBtn").disabled = false;
+    $("#status").innerHTML = `<span class="ok">Fatto!</span> Sorteggio completato senza doppi.`;
+  }
+
+  function renderTeams(a,b){
+    const renderList = (id, list)=>{
+      const box = document.querySelector(`#${id} .list`);
+      box.innerHTML = "";
+      for (const p of list){
+        box.append(
+          el("div",{class:"player"},
+            el("div",{class:"left"},
+              el("div",{class:"role"}, p.role),
+              el("div",{},
+                el("div",{class:"name"}, p.name),
+                el("div",{class:"id"}, `ID: ${p.id}`)
+              )
+            ),
+            el("div",{class:"right muted small"}, " ")
+          )
+        );
+      }
+    };
+    renderList("teamA", a);
+    renderList("teamB", b);
+  }
+
+  // Copia elenco
+  function copyToClipboard(){
+    if (!LAST_DRAW) return;
+    const lines = [];
+    lines.push("Squadra A");
+    for (const p of LAST_DRAW.teamA) lines.push(`${p.role}\t${p.name}\t${p.id}`);
+    lines.push("");
+    lines.push("Squadra B");
+    for (const p of LAST_DRAW.teamB) lines.push(`${p.role}\t${p.name}\t${p.id}`);
+    const text = lines.join("\n");
+    navigator.clipboard.writeText(text).then(()=>{
+      $("#status").innerHTML = `<span class="ok">Copiato!</span> Elenco negli appunti.`;
+    }).catch(()=>{
+      $("#status").innerHTML = `<span class="warn">Attenzione:</span> impossibile copiare automaticamente.`;
+    });
+  }
+
+  // Esporta CSV
+  function downloadCSV(){
+    if (!LAST_DRAW) return;
+    const rows = [
+      ["Team","ID","FullName","Role"]
+    ];
+    for (const p of LAST_DRAW.teamA) rows.push(["A", p.id, p.name, p.role]);
+    for (const p of LAST_DRAW.teamB) rows.push(["B", p.id, p.name, p.role]);
+    const csv = rows.map(r=>r.map(v=>String(v).includes(",")?`"${String(v).replace(/"/g,'""')}"`:v).join(",")).join("\n");
+    const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "sorteggio_2_squadre.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  // Caricamento automatico players.json
+  async function autoLoad(){
+    try{
+      const res = await fetch("./players.json", {cache:"no-store"});
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const raw = await res.json();
+      const norm = normalizeDataset(raw);
+      DATA = norm;
+      updateAvailability();
+      validateCounts();
+      $("#status").innerHTML = `Caricato automaticamente <code>players.json</code> (${DATA.length} giocatori).`;
+    }catch(e){
+      $("#status").innerHTML = `Impossibile caricare <code>players.json</code>. Carica un JSON/Excel qui sopra.`;
+    }
+  }
+
+  // Gestione file input
+  $("#fileInput").addEventListener("change", async (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    try{
+      const raw = await readUserFile(f);
+      DATA = normalizeDataset(raw);
+      updateAvailability();
+      validateCounts();
+      $("#status").innerHTML = `Caricato dataset da file: <b>${f.name}</b> (${DATA.length} giocatori).`;
+    }catch(err){
+      console.error(err);
+      $("#status").innerHTML = `<span class="err">Errore:</span> ${err.message}`;
+    } finally {
+      e.target.value = "";
+    }
+  });
+
+  // Pulsanti
+  $("#drawBtn").addEventListener("click", drawTeams);
+  $("#reshuffleBtn").addEventListener("click", drawTeams);
+  $("#copyBtn").addEventListener("click", copyToClipboard);
+  $("#csvBtn").addEventListener("click", downloadCSV);
+  $("#resetBtn").addEventListener("click", ()=>{
+    ROLES.forEach(r=>{
+      roleState[r]=0;
+      $(`#qty-${r}`).value = 0;
+      $(`#box-${r}`).style.borderColor = "var(--line)";
+    });
+    LAST_DRAW=null;
+    $("#teamA .list").innerHTML=""; $("#teamB .list").innerHTML="";
+    $("#reshuffleBtn").disabled = true;
+    $("#copyBtn").disabled = true;
+    $("#csvBtn").disabled = true;
+    validateCounts();
+  });
+
+  // Avvio
+  autoLoad();
+  </script>
+</body>
+</html>
